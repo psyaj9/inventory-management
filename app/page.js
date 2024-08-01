@@ -12,47 +12,50 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const updateInventory = async () => {
-    const snapshot = query(collection(firestore, 'inventory'));
-    const docs = await getDocs(snapshot);
-    const inventoryList = [];
-    docs.forEach((doc) => {
-      inventoryList.push({
-        name: doc.id,
-        ...doc.data(),
+    if (typeof window !== 'undefined') {
+      const snapshot = query(collection(firestore, 'inventory'));
+      const docs = await getDocs(snapshot);
+      const inventoryList = [];
+      docs.forEach((doc) => {
+        inventoryList.push({
+          name: doc.id,
+          ...doc.data(),
+        });
       });
-    });
-
-    setInventory(inventoryList);
+      setInventory(inventoryList);
+    }
   };
 
   const addItem = async (item) => {
-    const docRef = doc(collection(firestore, 'inventory'), item);
-    const docSnap = await getDoc(docRef);
+    if (typeof window !== 'undefined') {
+      const docRef = doc(collection(firestore, 'inventory'), item);
+      const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      const { quantity } = docSnap.data();
-      await setDoc(docRef, { quantity: quantity + 1 });
-    } else {
-      await setDoc(docRef, { quantity: 1 });
+      if (docSnap.exists()) {
+        const { quantity } = docSnap.data();
+        await setDoc(docRef, { quantity: quantity + 1 });
+      } else {
+        await setDoc(docRef, { quantity: 1 });
+      }
+      await updateInventory();
     }
-
-    await updateInventory();
   };
 
   const removeItem = async (item) => {
-    const docRef = doc(collection(firestore, 'inventory'), item);
-    const docSnap = await getDoc(docRef);
+    if (typeof window !== 'undefined') {
+      const docRef = doc(collection(firestore, 'inventory'), item);
+      const docSnap = await getDoc(docRef);
 
-    if (docSnap.exists()) {
-      const { quantity } = docSnap.data();
-      if (quantity === 1) {
-        await deleteDoc(docRef);
-      } else {
-        await setDoc(docRef, { quantity: quantity - 1 });
+      if (docSnap.exists()) {
+        const { quantity } = docSnap.data();
+        if (quantity === 1) {
+          await deleteDoc(docRef);
+        } else {
+          await setDoc(docRef, { quantity: quantity - 1 });
+        }
       }
+      await updateInventory();
     }
-
-    await updateInventory();
   };
 
   useEffect(() => {
@@ -162,5 +165,6 @@ export default function Home() {
     </Box>
   );
 }
+
 
 
