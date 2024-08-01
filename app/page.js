@@ -12,7 +12,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const updateInventory = async () => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && firestore) {
       const snapshot = query(collection(firestore, 'inventory'));
       const docs = await getDocs(snapshot);
       const inventoryList = [];
@@ -27,7 +27,7 @@ export default function Home() {
   };
 
   const addItem = async (item) => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && firestore) {
       const docRef = doc(collection(firestore, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
@@ -42,7 +42,7 @@ export default function Home() {
   };
 
   const removeItem = async (item) => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && firestore) {
       const docRef = doc(collection(firestore, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
