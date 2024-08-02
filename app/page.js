@@ -1,15 +1,26 @@
 'use client'
 import { useState, useEffect } from "react";
-import { firestore } from '@/firebase';
+import { firestore, storage, auth } from '@/firebase';
 import { Box, Typography, Modal, Stack, TextField, Button, IconButton, AppBar, Toolbar } from '@mui/material';
 import { Add, Remove, Search } from '@mui/icons-material';
 import { getDoc, setDoc, deleteDoc, doc, collection, query, getDocs } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import Auth from './Auth'; // Adjusted import statement
 
 export default function Home() {
   const [inventory, setInventory] = useState([]);
   const [open, setOpen] = useState(false);
   const [itemName, setItemName] = useState('');
+  const [itemImage, setItemImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+  }, []);
 
   const updateInventory = async () => {
     if (typeof window !== 'undefined' && firestore) {
@@ -26,32 +37,49 @@ export default function Home() {
     }
   };
 
-  const addItem = async (item) => {
-    if (typeof window !== 'undefined' && firestore) {
+  const handleFileChange = (e) => {
+    if (e.target.files[0]) {
+      setItemImage(e.target.files[0]);
+    }
+  };
+
+  const addItem = async (item, imageFile) => {
+    if (typeof window !== 'undefined' && firestore && storage) {
+      let imageUrl = '';
+      if (imageFile) {
+        const storageRef = ref(storage, `images/${item}_${Date.now()}`);
+        await uploadBytes(storageRef, imageFile);
+        imageUrl = await getDownloadURL(storageRef);
+      }
+
       const docRef = doc(collection(firestore, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const { quantity } = docSnap.data();
-        await setDoc(docRef, { quantity: quantity + 1 });
+        const { quantity, imageUrl: existingImageUrl } = docSnap.data();
+        await setDoc(docRef, { quantity: quantity + 1, imageUrl: existingImageUrl || imageUrl });
       } else {
-        await setDoc(docRef, { quantity: 1 });
+        await setDoc(docRef, { quantity: 1, imageUrl });
       }
       await updateInventory();
     }
   };
 
   const removeItem = async (item) => {
-    if (typeof window !== 'undefined' && firestore) {
+    if (typeof window !== 'undefined' && firestore && storage) {
       const docRef = doc(collection(firestore, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        const { quantity } = docSnap.data();
+        const { quantity, imageUrl } = docSnap.data();
         if (quantity === 1) {
+          if (imageUrl) {
+            const imageRef = ref(storage, imageUrl);
+            await deleteObject(imageRef);
+          }
           await deleteDoc(docRef);
         } else {
-          await setDoc(docRef, { quantity: quantity - 1 });
+          await setDoc(docRef, { quantity: quantity - 1, imageUrl });
         }
       }
       await updateInventory();
@@ -59,8 +87,10 @@ export default function Home() {
   };
 
   useEffect(() => {
-    updateInventory();
-  }, []);
+    if (user) {
+      updateInventory();
+    }
+  }, [user]);
 
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
@@ -69,6 +99,10 @@ export default function Home() {
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  if (!user) {
+    return <Auth onAuthStateChanged={setUser} />;
+  }
+
   return (
     <Box width="100vw" height="100vh" display="flex" flexDirection="column" alignItems="center" bgcolor="#f5f5f5">
       <AppBar position="static" sx={{ marginBottom: 4 }}>
@@ -76,7 +110,7 @@ export default function Home() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Pantry Tracker
           </Typography>
-          <Button color="inherit" onClick={handleOpen}>Add New Item</Button>
+          <Button color="inherit" onClick={() => signOut(auth)}>Logout</Button>
         </Toolbar>
       </AppBar>
       
@@ -106,20 +140,30 @@ export default function Home() {
             <Button 
               variant="contained" 
               onClick={() => {
-                addItem(itemName);
+                addItem(itemName, itemImage);
                 setItemName('');
+                setItemImage(null);
                 handleClose();
               }}
             >
               Add
             </Button>
           </Stack>
+          <Button variant="contained" component="label">
+            Upload Image
+            <input type="file" hidden onChange={handleFileChange} />
+          </Button>
         </Box>
       </Modal>
       
       <Box width="80%" border="1px solid #333" borderRadius={2} overflow="hidden" bgcolor="#ffffff">
         <Box width="100%" bgcolor="#1976d2" p={2} display="flex" alignItems="center" justifyContent="space-between">
-          <Typography variant="h4" color="white">Stored Items</Typography>
+          <Box display="flex" alignItems="center" gap={2}>
+            <Button variant="contained" color="primary" onClick={handleOpen}>
+              Add Item
+            </Button>
+            <Typography variant="h4" color="white">Stored Items</Typography>
+          </Box>
           <TextField 
             variant="outlined" 
             placeholder="Search items" 
@@ -134,7 +178,7 @@ export default function Home() {
           />
         </Box>
         <Stack width="100%" p={2} spacing={2} overflow="auto">
-          {filteredInventory.map(({name, quantity}) => (
+          {filteredInventory.map(({name, quantity, imageUrl}) => (
             <Box
               key={name}
               width="100%"
@@ -146,9 +190,12 @@ export default function Home() {
               borderRadius={2}
               boxShadow={1}
             >
-              <Typography variant="h5" color="#333">
-                {name.charAt(0).toUpperCase() + name.slice(1)}
-              </Typography>
+              <Box display="flex" alignItems="center" gap={2}>
+                {imageUrl && <img src={imageUrl} alt={name} width="50" height="50" style={{borderRadius: '50%'}} />}
+                <Typography variant="h5" color="#333">
+                  {name.charAt(0).toUpperCase() + name.slice(1)}
+                </Typography>
+              </Box>
               <Stack direction="row" spacing={2} alignItems="center">
                 <Typography variant="h6" color="#333">{quantity}</Typography>
                 <IconButton color="primary" onClick={() => addItem(name)}>
@@ -165,6 +212,10 @@ export default function Home() {
     </Box>
   );
 }
+
+
+
+
 
 
 
