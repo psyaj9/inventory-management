@@ -23,8 +23,9 @@ export default function Home() {
   }, []);
 
   const updateInventory = async () => {
-    if (typeof window !== 'undefined' && firestore) {
-      const snapshot = query(collection(firestore, 'inventory'));
+    if (typeof window !== 'undefined' && firestore && user) {
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const snapshot = query(collection(userDocRef, 'inventory'));
       const docs = await getDocs(snapshot);
       const inventoryList = [];
       docs.forEach((doc) => {
@@ -44,15 +45,16 @@ export default function Home() {
   };
 
   const addItem = async (item, imageFile) => {
-    if (typeof window !== 'undefined' && firestore && storage) {
+    if (typeof window !== 'undefined' && firestore && storage && user) {
       let imageUrl = '';
       if (imageFile) {
-        const storageRef = ref(storage, `images/${item}_${Date.now()}`);
+        const storageRef = ref(storage, `images/${user.uid}/${item}_${Date.now()}`);
         await uploadBytes(storageRef, imageFile);
         imageUrl = await getDownloadURL(storageRef);
       }
 
-      const docRef = doc(collection(firestore, 'inventory'), item);
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const docRef = doc(collection(userDocRef, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
@@ -66,8 +68,9 @@ export default function Home() {
   };
 
   const removeItem = async (item) => {
-    if (typeof window !== 'undefined' && firestore && storage) {
-      const docRef = doc(collection(firestore, 'inventory'), item);
+    if (typeof window !== 'undefined' && firestore && storage && user) {
+      const userDocRef = doc(firestore, 'users', user.uid);
+      const docRef = doc(collection(userDocRef, 'inventory'), item);
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
@@ -212,6 +215,7 @@ export default function Home() {
     </Box>
   );
 }
+
 
 
 
